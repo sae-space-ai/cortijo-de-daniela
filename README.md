@@ -57,7 +57,8 @@ GEO-LAB es una plataforma web de reconocimiento cartográfico que integra:
 ### Documentación
 - **`README.md`** — Este archivo (resumen general)
 - **`GEOLAB_3.0_LIDAR_MDT_GUIDE.md`** — Guía completa de integración LiDAR/MDT
-- **`IGME_SERVICE_DOCUMENTATION.md`** — Documentación del servicio IGME
+- **`IGME_SERVICE_DOCUMENTATION.md`** — Documentación del servicio IGME (Inventario de Escombreras)
+- **`BDMIN_SERVICE_DOCUMENTATION.md`** — Documentación del servicio BDMIN (Indicios Minerales)
 - **`public/cortijo_daniela_busqueda_escombreras_original.html`** — Versión 1.0 original
 
 ### Build
@@ -211,11 +212,18 @@ GEO-LAB es una plataforma web de reconocimiento cartográfico que integra:
   - Análisis de anomalías morfológicas
   - Trazabilidad y documentación
 
-- **[IGME_SERVICE_DOCUMENTATION.md](./IGME_SERVICE_DOCUMENTATION.md)** — Documentación del servicio IGME
+- **[IGME_SERVICE_DOCUMENTATION.md](./IGME_SERVICE_DOCUMENTATION.md)** — Documentación del servicio IGME (Inventario de Escombreras)
   - Campos disponibles (34 campos)
   - Consultas avanzadas con filtros
   - Integración con otras fuentes
   - Ejemplos de uso
+
+- **[BDMIN_SERVICE_DOCUMENTATION.md](./BDMIN_SERVICE_DOCUMENTATION.md)** — Documentación del servicio BDMIN (Base de Datos de Indicios Minerales)
+  - Campos disponibles (35+ campos)
+  - Códigos de simbología por tipo de mineral
+  - Consultas por sustancia, estado, tipo de yacimiento
+  - Integración con Inventario de Escombreras y GEODE
+  - Ejemplos de uso para el Cortijo de Daniela
 
 ---
 
