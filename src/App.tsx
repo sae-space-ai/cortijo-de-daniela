@@ -121,6 +121,173 @@ export default function App() {
   const [statusMsg, setStatusMsg] = useState<string>("");
   const [currentBase, setCurrentBase] = useState<string>("Esri World Imagery");
 
+  /* ─── Gestión de Permisos y Cuadrículas ─── */
+  interface Permiso {
+    id: string;
+    expediente: string;
+    tipo: "arqueologico" | "minero" | "geotecnico";
+    fecha: string;
+    responsable: string;
+    cuadriculas: number;
+  }
+
+  interface CuadriculaConfig {
+    origenX: number;
+    origenY: number;
+    tamano: number;
+    filasColumnas: string;
+  }
+
+  const [showPermisos, setShowPermisos] = useState(false);
+  const [permisos, setPermisos] = useState<Permiso[]>([]);
+  const [nuevoPermiso, setNuevoPermiso] = useState<Omit<Permiso, "id" | "cuadriculas">>({
+    expediente: "",
+    tipo: "arqueologico",
+    fecha: "",
+    responsable: ""
+  });
+  const [nuevaCuadricula, setNuevaCuadricula] = useState<CuadriculaConfig>({
+    origenX: 232500,
+    origenY: 4208000,
+    tamano: 10,
+    filasColumnas: "5x5"
+  });
+  const cuadriculasLayerRef = useRef<L.LayerGroup | null>(null);
+
+  const guardarPermiso = useCallback(() => {
+    if (!nuevoPermiso.expediente || !nuevoPermiso.fecha) {
+      setStatusMsg("Complete expediente y fecha.");
+      return;
+    }
+    const permiso: Permiso = {
+      id: Date.now().toString(36),
+      ...nuevoPermiso,
+      cuadriculas: 0
+    };
+    const nuevos = [...permisos, permiso];
+    setPermisos(nuevos);
+    try { localStorage.setItem("geolab_permisos", JSON.stringify(nuevos)); } catch { /* */ }
+    setNuevoPermiso({ expediente: "", tipo: "arqueologico", fecha: "", responsable: "" });
+    setStatusMsg(`Permiso ${permiso.expediente} registrado.`);
+  }, [nuevoPermiso, permisos]);
+
+  const crearCuadricula = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Crear capa si no existe
+    if (!cuadriculasLayerRef.current) {
+      cuadriculasLayerRef.current = L.layerGroup().addTo(map);
+    }
+    const layer = cuadriculasLayerRef.current;
+    layer.clearLayers();
+
+    // Parsear dimensiones
+    const [filas, columnas] = nuevaCuadricula.filasColumnas.split("x").map(Number);
+    if (isNaN(filas) || isNaN(columnas) || filas < 1 || columnas < 1) {
+      setStatusMsg("Dimensiones inválidas. Use formato: 5x5");
+      return;
+    }
+
+    // Convertir UTM a WGS84 (aproximación simplificada)
+    const utmToWgs84 = (x: number, y: number): [number, number] => {
+      // Zona 29N, el factor de conversión aproximado
+      const lon = (x - 500000) / (111320 * Math.cos(38 * Math.PI / 180)) - 6;
+      const lat = y / 111320;
+      return [lat, lon];
+    };
+
+    // Generar cuadrículas
+    let count = 0;
+    const letras = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (let fila = 0; fila < filas; fila++) {
+      for (let col = 0; col < columnas; col++) {
+        const x = nuevaCuadricula.origenX + col * nuevaCuadricula.tamano;
+        const y = nuevaCuadricula.origenY + fila * nuevaCuadricula.tamano;
+
+        const [lat1, lon1] = utmToWgs84(x, y);
+        const [lat2, lon2] = utmToWgs84(x + nuevaCuadricula.tamano, y + nuevaCuadricula.tamano);
+
+        const bounds: L.LatLngBoundsExpression = [[lat1, lon1], [lat2, lon2]];
+        const id = `${letras[fila]}-${col + 1}`;
+
+        L.rectangle(bounds, {
+          color: "#ec4899",
+          weight: 1.5,
+          fillOpacity: 0.1,
+          dashArray: "4 2"
+        }).bindPopup(`<b>Cuadrícula ${id}</b><br>UTM: ${x}-${x + nuevaCuadricula.tamano}, ${y}-${y + nuevaCuadricula.tamano}<br>Tamaño: ${nuevaCuadricula.tamano}×${nuevaCuadricula.tamano} m`)
+          .addTo(layer);
+        count++;
+      }
+    }
+
+    // Ajustar vista
+    const [latC, lonC] = utmToWgs84(
+      nuevaCuadricula.origenX + (columnas * nuevaCuadricula.tamano) / 2,
+      nuevaCuadricula.origenY + (filas * nuevaCuadricula.tamano) / 2
+    );
+    map.setView([latC, lonC], 17);
+
+    setStatusMsg(`Cuadrícula generada: ${count} celdas (${filas}×${columnas}) de ${nuevaCuadricula.tamano}m`);
+  }, [nuevaCuadricula]);
+
+  const importCuadriculas = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string) as GeoJSON.FeatureCollection;
+        if (!data.features) {
+          setStatusMsg("Error: archivo sin features.");
+          return;
+        }
+
+        const map = mapRef.current;
+        if (!map) return;
+
+        if (!cuadriculasLayerRef.current) {
+          cuadriculasLayerRef.current = L.layerGroup().addTo(map);
+        }
+        const layer = cuadriculasLayerRef.current;
+        layer.clearLayers();
+
+        L.geoJSON(data as any, {
+          style: () => ({
+            color: "#ec4899",
+            weight: 2,
+            fillOpacity: 0.15,
+            dashArray: "4 2"
+          }),
+          onEachFeature: (f: any, l: L.Layer) => {
+            const props = f.properties || {};
+            const popup = `<b>Cuadrícula ${props.id || props.denominacion || ""}</b><br>
+              Tipo: ${props.tipo || "prospección"}<br>
+              Estado: ${props.estado || "pendiente"}<br>
+              ${props.fecha ? `Fecha: ${props.fecha}<br>` : ""}
+              ${props.responsable ? `Responsable: ${props.responsable}<br>` : ""}
+              ${props.materiales ? `Materiales: ${props.materiales}<br>` : ""}
+              ${props.observaciones ? `<small>${props.observaciones}</small>` : ""}`;
+            l.bindPopup(popup);
+          }
+        }).addTo(layer);
+
+        map.fitBounds(L.geoJSON(data as any).getBounds());
+        setStatusMsg(`Importadas ${data.features.length} cuadrículas.`);
+      } catch {
+        setStatusMsg("Error al leer cuadrículas.");
+      }
+    };
+    reader.readAsText(file);
+  }, []);
+
+  // Cargar permisos desde localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("geolab_permisos");
+      if (saved) setPermisos(JSON.parse(saved));
+    } catch { /* */ }
+  }, []);
+
   /* ─── Fase 3: MDT y consulta de cotas ─── */
   interface MDTMetadata {
     resolution: number;
@@ -1099,6 +1266,114 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
             </div>
           </div>
         </div>
+
+        {/* Histórico de Permisos y Catas */}
+        <div className="bg-[#fce7f3] border border-[#f9a8d4] rounded-lg p-2.5 mb-2 text-[10px] leading-snug">
+          <b className="text-[#9d174d]">📋 Histórico de Permisos y Catas · Junta de Extremadura</b>
+          <div className="mt-1 text-[#831843]">
+            <b>Gestión de intervenciones arqueológicas y mineras:</b>
+            <ul className="list-disc pl-3 mt-0.5 space-y-0.5">
+              <li><b>Permisos arqueológicos:</b> Servicio de Patrimonio Cultural (Badajoz)</li>
+              <li><b>Permisos mineros:</b> Portal SIGEO (Administración Minera)</li>
+              <li><b>Cuadrículas UTM:</b> Sistema ETRS89 / Huso 29N (EPSG:25829)</li>
+              <li><b>Intervenciones:</b> Prospecciones, sondeos, excavaciones</li>
+            </ul>
+            <div className="mt-1.5 bg-white/50 rounded p-1.5">
+              <b>Referencias UTM para el Cortijo de Daniela:</b><br />
+              X: 232500-233000 · Y: 4208000-4208500<br />
+              Hoja MTN50: 718 (Llerena)
+            </div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              <button onClick={() => setShowPermisos(!showPermisos)} className="px-2 py-0.5 bg-[#ec4899] text-white rounded text-[9px] font-semibold hover:bg-[#db2777]">
+                {showPermisos ? "Ocultar" : "Gestionar"} permisos
+              </button>
+              <label className="px-2 py-0.5 bg-white border border-[#f9a8d4] rounded text-[9px] text-[#9d174d] hover:bg-[#fce7f3] cursor-pointer font-semibold">
+                ⬆ Cuadrículas
+                <input type="file" accept=".geojson,.json" className="hidden" onChange={e => e.target.files?.[0] && importCuadriculas(e.target.files[0])} />
+              </label>
+            </div>
+            <div className="mt-1 text-[#9d174d]">
+              <a href="http://sigeo.juntaex.es/portalsigeo/" target="_blank" rel="noopener noreferrer" className="underline font-semibold">
+                → Portal SIGEO
+              </a>
+              {' · '}
+              <a href="https://www.juntaex.es/es/w/1237" target="_blank" rel="noopener noreferrer" className="underline font-semibold">
+                → Autorizaciones arqueológicas
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* Panel de gestión de permisos */}
+        {showPermisos && (
+          <div className="bg-[#fdf2f8] border border-[#fbcfe8] rounded-lg p-2.5 mb-2 text-[10px]">
+            <div className="font-bold text-[#9d174d] mb-1.5">📋 Gestión de Permisos y Cuadrículas</div>
+            
+            {/* Formulario de nuevo permiso */}
+            <div className="bg-white rounded p-2 mb-2 border border-[#f9a8d4]">
+              <div className="font-semibold text-[#831843] mb-1">Nuevo permiso:</div>
+              <input placeholder="Nº expediente" value={nuevoPermiso.expediente} onChange={e => setNuevoPermiso({...nuevoPermiso, expediente: e.target.value})}
+                className="w-full px-1.5 py-0.5 border border-[#e5e7eb] rounded text-[9px] mb-1" />
+              <select value={nuevoPermiso.tipo} onChange={e => setNuevoPermiso({...nuevoPermiso, tipo: e.target.value as "arqueologico" | "minero" | "geotecnico"})}
+                className="w-full px-1.5 py-0.5 border border-[#e5e7eb] rounded text-[9px] mb-1">
+                <option value="arqueologico">Arqueológico</option>
+                <option value="minero">Minero</option>
+                <option value="geotecnico">Geotécnico</option>
+              </select>
+              <input placeholder="Fecha concesión" type="date" value={nuevoPermiso.fecha} onChange={e => setNuevoPermiso({...nuevoPermiso, fecha: e.target.value})}
+                className="w-full px-1.5 py-0.5 border border-[#e5e7eb] rounded text-[9px] mb-1" />
+              <input placeholder="Responsable" value={nuevoPermiso.responsable} onChange={e => setNuevoPermiso({...nuevoPermiso, responsable: e.target.value})}
+                className="w-full px-1.5 py-0.5 border border-[#e5e7eb] rounded text-[9px] mb-1" />
+              <button onClick={guardarPermiso} className="w-full px-2 py-0.5 bg-[#ec4899] text-white rounded text-[9px] font-semibold hover:bg-[#db2777]">
+                Guardar permiso
+              </button>
+            </div>
+
+            {/* Lista de permisos */}
+            {permisos.length > 0 && (
+              <div className="max-h-32 overflow-y-auto">
+                <div className="font-semibold text-[#831843] mb-1">Permisos registrados ({permisos.length}):</div>
+                {permisos.map((p, i) => (
+                  <div key={i} className="bg-white rounded p-1.5 mb-1 border border-[#f9a8d4] text-[9px]">
+                    <div className="font-semibold">{p.expediente} · {p.tipo}</div>
+                    <div className="text-[#6b7280]">{p.fecha} · {p.responsable}</div>
+                    <div className="text-[#6b7280]">Cuadrículas: {p.cuadriculas}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Crear cuadrícula */}
+            <div className="bg-white rounded p-2 mt-2 border border-[#f9a8d4]">
+              <div className="font-semibold text-[#831843] mb-1">Crear cuadrícula UTM:</div>
+              <div className="grid grid-cols-2 gap-1 text-[9px]">
+                <div>
+                  <label>Origen X:</label>
+                  <input type="number" value={nuevaCuadricula.origenX} onChange={e => setNuevaCuadricula({...nuevaCuadricula, origenX: parseFloat(e.target.value)})}
+                    className="w-full px-1 py-0.5 border border-[#e5e7eb] rounded" placeholder="232500" />
+                </div>
+                <div>
+                  <label>Origen Y:</label>
+                  <input type="number" value={nuevaCuadricula.origenY} onChange={e => setNuevaCuadricula({...nuevaCuadricula, origenY: parseFloat(e.target.value)})}
+                    className="w-full px-1 py-0.5 border border-[#e5e7eb] rounded" placeholder="4208000" />
+                </div>
+                <div>
+                  <label>Tamaño (m):</label>
+                  <input type="number" value={nuevaCuadricula.tamano} onChange={e => setNuevaCuadricula({...nuevaCuadricula, tamano: parseFloat(e.target.value)})}
+                    className="w-full px-1 py-0.5 border border-[#e5e7eb] rounded" placeholder="10" />
+                </div>
+                <div>
+                  <label>Filas x Columnas:</label>
+                  <input value={nuevaCuadricula.filasColumnas} onChange={e => setNuevaCuadricula({...nuevaCuadricula, filasColumnas: e.target.value})}
+                    className="w-full px-1 py-0.5 border border-[#e5e7eb] rounded" placeholder="5x5" />
+                </div>
+              </div>
+              <button onClick={crearCuadricula} className="w-full px-2 py-0.5 bg-[#ec4899] text-white rounded text-[9px] font-semibold hover:bg-[#db2777] mt-1">
+                Generar cuadrícula en mapa
+              </button>
+            </div>
+          </div>
+        )}
         
         <div className="flex flex-wrap gap-1.5 mb-2">
           <label className="px-2 py-1 text-[11px] bg-[#eff6ff] border border-[#bfdbfe] rounded-md text-[#1e40af] hover:bg-[#dbeafe] cursor-pointer font-semibold">
