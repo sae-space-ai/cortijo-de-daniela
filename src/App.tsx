@@ -129,6 +129,9 @@ export default function App() {
     const wmsGeode = L.tileLayer.wms("https://mapas.igme.es/gis/services/Cartografia/IGME_Geode50/MapServer/WMSServer", {
       layers: "0", format: "image/png", transparent: true, version: "1.3.0", attribution: "IGME | GEODE 1:50.000"
     });
+    const wmsArqueologia = L.tileLayer.wms("http://mapas.ideex.es/CICTEX/patrimonioCultural", {
+      layers: "I-09_Bienes de Interés Cultural", format: "image/png", transparent: true, version: "1.3.0", attribution: "Junta de Extremadura | Patrimonio Cultural"
+    });
 
     // Reference layers
     const radius1 = L.circle(CORTIJO, { radius: 1000, color: "#d39c3a", weight: 2, dashArray: "8 7", fillColor: "#b5aa8f", fillOpacity: 0.035 }).addTo(map);
@@ -166,7 +169,12 @@ export default function App() {
     importedLayerRef.current = importedLayer;
 
     // Store WMS refs
-    (window as any).__wmsLayers = { "Escombreras IGME": wmsEs, "Indicios minerales IGME": wmsMineral, "GEODE 1:50.000": wmsGeode };
+    (window as any).__wmsLayers = {
+      "Escombreras IGME": wmsEs,
+      "Indicios minerales IGME": wmsMineral,
+      "GEODE 1:50.000": wmsGeode,
+      "Patrimonio arqueológico": wmsArqueologia
+    };
 
     map.fitBounds(radius1.getBounds());
     mapRef.current = map;
@@ -549,6 +557,77 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
     downloadBlob(blob, "plantilla_geolab.csv");
   }, []);
 
+  /* ─── Fase 2: LiDAR y MDT ─── */
+  const [profileData, setProfileData] = useState<Array<{lat: number; lon: number; elev: number}>>([]);
+  const lidarLayerRef = useRef<L.LayerGroup | null>(null);
+
+  const importLidarData = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string) as GeoJSON.FeatureCollection;
+        if (!data.features || data.features.length > 5000) {
+          setStatusMsg("Error: máximo 5.000 elementos permitidos.");
+          return;
+        }
+        // Crear capa específica para LiDAR si no existe
+        if (!lidarLayerRef.current && mapRef.current) {
+          lidarLayerRef.current = L.layerGroup().addTo(mapRef.current);
+        }
+        const layer = lidarLayerRef.current;
+        if (layer) {
+          layer.clearLayers();
+          L.geoJSON(data as any, {
+            style: () => ({ color: "#dc2626", weight: 2, fillOpacity: 0.15 }),
+            pointToLayer: (f: any, latlng) => {
+              const tipo = f.properties?.tipo || "anomalia";
+              const color = tipo === "depresion" ? "#7c3aed" : tipo === "monticulo" ? "#dc2626" : "#f59e0b";
+              return L.circleMarker(latlng, { radius: 4, color, fillColor: color, fillOpacity: 0.7 });
+            },
+            onEachFeature: (f: any, l: L.Layer) => {
+              const props = f.properties || {};
+              l.bindPopup(`<b>Anomalía LiDAR</b><br>Tipo: ${props.tipo || "no clasificado"}<br>${props.descripcion || ""}<br><small>Requiere verificación de campo</small>`);
+            }
+          }).addTo(layer);
+        }
+        setStatusMsg(`LiDAR importado: ${data.features.length} anomalías. Verificación de campo necesaria.`);
+      } catch { setStatusMsg("Error al leer el archivo LiDAR."); }
+    };
+    reader.readAsText(file);
+  }, []);
+
+  const importProfileData = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length < 2) { setStatusMsg("CSV de perfil vacío."); return; }
+        const points: Array<{lat: number; lon: number; elev: number}> = [];
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(";");
+          const lat = parseFloat(parts[0]?.replace(/"/g, ""));
+          const lon = parseFloat(parts[1]?.replace(/"/g, ""));
+          const elev = parseFloat(parts[2]?.replace(/"/g, ""));
+          if (isNaN(lat) || isNaN(lon) || isNaN(elev)) continue;
+          points.push({ lat, lon, elev });
+        }
+        setProfileData(points);
+        // Dibujar perfil en el mapa
+        if (mapRef.current) {
+          const latlngs = points.map(p => [p.lat, p.lon] as [number, number]);
+          L.polyline(latlngs, { color: "#0284c7", weight: 3, dashArray: "5 5" }).addTo(mapRef.current);
+          mapRef.current.fitBounds(L.polyline(latlngs).getBounds());
+        }
+        setStatusMsg(`Perfil importado: ${points.length} puntos.`);
+      } catch { setStatusMsg("Error al leer el perfil."); }
+    };
+    reader.readAsText(file);
+  }, []);
+
+  const minElev = profileData.length > 0 ? Math.min(...profileData.map(p => p.elev)) : 0;
+  const maxElev = profileData.length > 0 ? Math.max(...profileData.map(p => p.elev)) : 0;
+
   function downloadBlob(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -606,7 +685,7 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
         {/* WMS Overlays */}
         <h2 className="text-sm font-bold mb-1.5 text-[#18374a]">Capas WMS</h2>
         <div className="flex flex-wrap gap-1.5 mb-3">
-          {["Escombreras IGME", "Indicios minerales IGME", "GEODE 1:50.000"].map(name => (
+          {["Escombreras IGME", "Indicios minerales IGME", "GEODE 1:50.000", "Patrimonio arqueológico"].map(name => (
             <button key={name} onClick={() => toggleOverlay(name)}
               className={`px-2 py-1 text-[11px] rounded-md border transition-colors ${activeOverlays.has(name) ? "bg-[#397590] text-white border-[#397590]" : "bg-white text-[#1d4559] border-[#d7e3eb] hover:bg-[#edf7fc]"}`}>
               {activeOverlays.has(name) ? "✓ " : ""}{name}
@@ -707,6 +786,50 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
 
         <div className="h-px bg-[#e4eaf0] my-3" />
 
+        {/* Fase 2 - Análisis avanzados */}
+        <h2 className="text-sm font-bold mb-1.5 text-[#18374a]">Fase 2 · Análisis avanzados</h2>
+        <div className="bg-[#fef3c7] border border-[#fcd34d] rounded-lg p-2.5 mb-2 text-[10px] leading-snug">
+          <b className="text-[#92400e]">Preparado para importar resultados procesados:</b>
+          <ul className="list-disc pl-3 mt-1 space-y-0.5 text-[#78350f]">
+            <li>LiDAR PNOA procesado (GeoJSON de anomalías topográficas)</li>
+            <li>MDT oficial (perfiles topográficos, curvas de nivel)</li>
+            <li>Clasificación de puntos (suelo, vegetación, estructuras)</li>
+          </ul>
+          <div className="mt-1.5 text-[#92400e]">
+            <b>Importante:</b> Las anomalías cartográficas no son hallazgos geológicos demostrados. Requieren verificación de campo y análisis especializado.
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          <label className="px-2 py-1 text-[11px] bg-[#fef3c7] border border-[#fcd34d] rounded-md text-[#92400e] hover:bg-[#fde68a] cursor-pointer font-semibold">
+            ⬆ LiDAR procesado (GeoJSON)
+            <input type="file" accept=".geojson,.json" className="hidden" onChange={e => e.target.files?.[0] && importLidarData(e.target.files[0])} />
+          </label>
+          <label className="px-2 py-1 text-[11px] bg-[#fef3c7] border border-[#fcd34d] rounded-md text-[#92400e] hover:bg-[#fde68a] cursor-pointer font-semibold">
+            ⬆ MDT perfiles (CSV)
+            <input type="file" accept=".csv" className="hidden" onChange={e => e.target.files?.[0] && importProfileData(e.target.files[0])} />
+          </label>
+        </div>
+
+        {/* Perfil topográfico */}
+        {profileData.length > 0 && (
+          <div className="bg-[#f0f9ff] border border-[#bae6fd] rounded-lg p-2 mb-2">
+            <div className="text-[11px] font-bold text-[#0c4a6e] mb-1">Perfil topográfico</div>
+            <div className="h-24 bg-white rounded border border-[#e0f2fe] relative overflow-hidden">
+              <svg width="100%" height="100%" viewBox="0 0 300 80" preserveAspectRatio="none">
+                <polyline
+                  points={profileData.map((p, i) => `${(i / (profileData.length - 1)) * 300},${80 - ((p.elev - minElev) / (maxElev - minElev)) * 70 - 5}`).join(" ")}
+                  fill="none" stroke="#0284c7" strokeWidth="2"
+                />
+              </svg>
+            </div>
+            <div className="text-[9px] text-[#475569] mt-1">
+              Elevación: {minElev.toFixed(1)} m — {maxElev.toFixed(1)} m · Desnivel: {(maxElev - minElev).toFixed(1)} m
+            </div>
+          </div>
+        )}
+
+        <div className="h-px bg-[#e4eaf0] my-3" />
+
         {/* Import/Export */}
         <h2 className="text-sm font-bold mb-1.5 text-[#18374a]">Importar / Exportar</h2>
         <div className="flex flex-wrap gap-1.5 mb-2">
@@ -770,7 +893,27 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
           <a className="text-[#147198]" target="_blank" rel="noopener noreferrer" href="https://mapas.igme.es/gis/rest/services/BasesDatos/IGME_BDMIN_Indicios/MapServer/0">BDMIN indicios</a>
           {' · '}
           <a className="text-[#147198]" target="_blank" rel="noopener noreferrer" href="https://info.igme.es/cartografiadigital/geologica/Geode.aspx">GEODE</a>
+          {' · '}
+          <a className="text-[#147198]" target="_blank" rel="noopener noreferrer" href="http://mapas.ideex.es/CICTEX/patrimonioCultural">Patrimonio Extremadura</a>
         </p>
+
+        <div className="h-px bg-[#e4eaf0] my-3" />
+
+        {/* Límites probatorios */}
+        <div className="bg-[#fef2f2] border border-[#fecaca] rounded-lg p-2.5 text-[10px] leading-snug">
+          <b className="text-[#991b1b] block mb-1">⚠ Límites probatorios de esta plataforma:</b>
+          <ul className="list-disc pl-3 space-y-0.5 text-[#7f1d1d]">
+            <li><b>No identifica minerales:</b> requiere análisis de laboratorio (DRX, espectrometría).</li>
+            <li><b>No detecta galerías subterráneas:</b> requiere geofísica de campo (georradar, resistividad).</li>
+            <li><b>No identifica yacimientos arqueológicos:</b> requiere prospección autorizada por la Junta de Extremadura.</li>
+            <li><b>Anomalías LiDAR ≠ hallazgos verificados:</b> son indicios cartográficos que requieren comprobación.</li>
+            <li><b>GEODE es escala 1:50.000:</b> no tiene detalle de estudio submétrico.</li>
+            <li><b>Los registros IGME son inventario histórico:</b> no demuestran presencia actual.</li>
+          </ul>
+          <div className="mt-1.5 text-[#991b1b] font-semibold">
+            Para verificación: estudio geotécnico, prospección arqueológica autorizada, análisis de laboratorio.
+          </div>
+        </div>
       </aside>
     </div>
   );
