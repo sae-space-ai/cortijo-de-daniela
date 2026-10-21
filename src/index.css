@@ -12,6 +12,28 @@ html, body, #root {
   box-shadow: 0 2px 9px rgba(0,0,0,0.13) !important;
 }
 
+.leaflet-popup-content-wrapper {
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.leaflet-popup-content {
+  margin: 10px 12px;
+  line-height: 1.4;
+}
+
+/* Scrollbar styling */
+aside::-webkit-scrollbar {
+  width: 5px;
+}
+aside::-webkit-scrollbar-thumb {
+  background: #c1cdd6;
+  border-radius: 3px;
+}
+aside::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 @media (max-width: 740px) {
   .leaflet-top.leaflet-right {
     top: 4px;
