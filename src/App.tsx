@@ -42,7 +42,20 @@ interface Observation {
 interface QueryResult {
   title: string;
   count: number;
-  features: Array<{ name: string; distance: number; tipo: string; lat: number; lon: number }>;
+  features: Array<{
+    name: string;
+    distance: number;
+    tipo: string;
+    lat: number;
+    lon: number;
+    paraje?: string;
+    sustancia?: string;
+    mena?: string;
+    volumen?: number;
+    cota?: number;
+    municipio?: string;
+    observaciones?: string;
+  }>;
   error?: string;
 }
 
@@ -272,12 +285,32 @@ export default function App() {
           const m = Math.round(dMeters(CORTIJO[0], CORTIJO[1], lat, lon));
           const name = a.NOMBRE || a.PARAJE || a.DENOMINACION || a.NOMBREMIN || "Registro sin denominación";
           const tipo = a.ESTRUC || a.Sustancia || a.SUSTANCIA || "";
+          const paraje = a.PARAJE || "";
+          const sustancia = a.Sustancia || a.SUSTANCIA || "";
+          const mena = a.MENA || "";
+          const volumen = a.VOLU || 0;
+          const cota = a.COTA || 0;
+          const municipio = a.NOMBRE_MUN || "";
+          const observaciones = a.OBSER || "";
+
           if (layer) {
-            const popup = `<b>${escapeText(name)}</b><br>${escapeText(title)}<br>${escapeText(tipo)}<br>${m} m del cortijo<br><small>IGME · registro histórico</small>`;
+            let popup = `<b>${escapeText(name)}</b><br>`;
+            popup += `<b>${escapeText(title)}</b><br>`;
+            if (tipo) popup += `Tipo: ${escapeText(tipo)}<br>`;
+            if (paraje && paraje !== name) popup += `Paraje: ${escapeText(paraje)}<br>`;
+            if (sustancia) popup += `Sustancia: ${escapeText(sustancia)}<br>`;
+            if (mena) popup += `Mena: ${escapeText(mena)}<br>`;
+            if (volumen > 0) popup += `Volumen: ${volumen.toLocaleString("es-ES")} m³<br>`;
+            if (cota > 0) popup += `Cota: ${cota} m<br>`;
+            if (municipio) popup += `Municipio: ${escapeText(municipio)}<br>`;
+            popup += `${m} m del cortijo<br>`;
+            if (observaciones) popup += `<small>${escapeText(observaciones)}</small><br>`;
+            popup += `<small>IGME · Inventario 1989 · registro histórico</small>`;
+
             L.circleMarker([lat, lon], { radius: 7, color: "#fff", weight: 1.5, fillColor: ep.color, fillOpacity: 0.95 })
-              .bindPopup(popup).addTo(layer);
+              .bindPopup(popup, { maxWidth: 300 }).addTo(layer);
           }
-          return { name, distance: m, tipo, lat, lon };
+          return { name, distance: m, tipo, lat, lon, paraje, sustancia, mena, volumen, cota, municipio, observaciones };
         });
         newResults.push({ title, count: features.length, features: parsedFeatures });
       } catch (e: any) {
@@ -404,12 +437,12 @@ export default function App() {
   }, [observations, importedData]);
 
   const exportCSV = useCallback(() => {
-    let csv = "lat;lon;nombre;tipo;descripcion;fecha\n";
+    let csv = "lat;lon;nombre;tipo;paraje;sustancia;mena;volumen_m3;cota_m;municipio;distancia_m;fuente;observaciones;fecha\n";
     observations.forEach(o => {
-      csv += `${o.lat};${o.lon};"${o.origen}";observacion;"${o.descripcion}";${o.fecha}\n`;
+      csv += `${o.lat};${o.lon};"${o.origen}";observacion;;;;;;0;"${o.descripcion}";${o.fecha}\n`;
     });
     results.forEach(r => r.features.forEach(f => {
-      csv += `${f.lat};${f.lon};"${f.name}";${r.title};"${f.tipo}";\n`;
+      csv += `${f.lat};${f.lon};"${f.name}";"${f.tipo}";"${f.paraje || ""}";"${f.sustancia || ""}";"${f.mena || ""}";${f.volumen || 0};${f.cota || 0};"${f.municipio || ""}";${f.distance};${r.title};"${f.observaciones || ""}";\n`;
     }));
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, "geolab_export.csv");
@@ -448,8 +481,27 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
     results.forEach(r => {
       html += `<h3>${r.title}: ${r.count} registros</h3>`;
       if (r.features.length > 0) {
-        html += `<table><tr><th>Nombre</th><th>Distancia</th><th>Tipo</th></tr>`;
-        r.features.forEach(f => { html += `<tr><td>${escapeText(f.name)}</td><td>${f.distance} m</td><td>${escapeText(f.tipo)}</td></tr>`; });
+        // Estadísticas
+        const minDist = Math.min(...r.features.map(f => f.distance));
+        const maxDist = Math.max(...r.features.map(f => f.distance));
+        const totalVol = r.features.reduce((sum, f) => sum + (f.volumen || 0), 0);
+        html += `<p><b>Estadísticas:</b> Distancia: ${minDist}–${maxDist} m`;
+        if (totalVol > 0) html += ` · Volumen total: ${totalVol.toLocaleString("es-ES")} m³`;
+        html += `</p>`;
+
+        html += `<table><tr><th>Nombre</th><th>Distancia</th><th>Tipo</th><th>Sustancia</th><th>Mena</th><th>Volumen</th><th>Cota</th><th>Municipio</th></tr>`;
+        r.features.forEach(f => {
+          html += `<tr>`;
+          html += `<td>${escapeText(f.name)}</td>`;
+          html += `<td>${f.distance} m</td>`;
+          html += `<td>${escapeText(f.tipo)}</td>`;
+          html += `<td>${escapeText(f.sustancia || "")}</td>`;
+          html += `<td>${escapeText(f.mena || "")}</td>`;
+          html += `<td>${f.volumen ? f.volumen.toLocaleString("es-ES") + " m³" : ""}</td>`;
+          html += `<td>${f.cota ? f.cota + " m" : ""}</td>`;
+          html += `<td>${escapeText(f.municipio || "")}</td>`;
+          html += `</tr>`;
+        });
         html += `</table>`;
       }
     });
@@ -711,19 +763,55 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
 
         {/* Results */}
         {results.length > 0 && (
-          <div className="text-[11px] leading-relaxed mb-3 max-h-40 overflow-y-auto">
+          <div className="text-[11px] leading-relaxed mb-3 max-h-60 overflow-y-auto">
             {results.map((r, i) => (
               <div key={i} className="border border-[#e0e8ee] rounded-lg p-2 mb-1.5">
-                <b className="block text-[#233c4d]">{r.title}: {r.count} registros</b>
-                {r.error ? <span className="text-red-600">Error: {r.error}</span> :
-                  r.count === 0 ? "Sin registros en este radio." :
-                    r.features.slice(0, 5).map((f, j) => (
-                      <div key={j} className="text-[10px] text-[#496270] pl-2">
-                        • {f.name} — {f.distance} m{f.tipo ? ` · ${f.tipo}` : ""}
+                <b className="block text-[#233c4d] mb-1">{r.title}: {r.count} registros</b>
+                {r.error ? (
+                  <span className="text-red-600">Error: {r.error}</span>
+                ) : r.count === 0 ? (
+                  <div className="text-[#587180]">Sin registros en este radio.</div>
+                ) : (
+                  <>
+                    {/* Estadísticas */}
+                    {r.features.length > 0 && (
+                      <div className="bg-[#f4f8fb] rounded p-1.5 mb-1.5 text-[10px]">
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                          <span>Distancia mín:</span>
+                          <span className="font-semibold">{Math.min(...r.features.map(f => f.distance))} m</span>
+                          <span>Distancia máx:</span>
+                          <span className="font-semibold">{Math.max(...r.features.map(f => f.distance))} m</span>
+                          {r.features.some(f => f.volumen && f.volumen > 0) && (
+                            <>
+                              <span>Volumen total:</span>
+                              <span className="font-semibold">
+                                {r.features.reduce((sum, f) => sum + (f.volumen || 0), 0).toLocaleString("es-ES")} m³
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    ))
-                }
-                {r.features.length > 5 && <div className="text-[10px] text-[#587180] pl-2">…y {r.features.length - 5} más</div>}
+                    )}
+                    {/* Lista de registros */}
+                    {r.features.slice(0, 8).map((f, j) => (
+                      <div key={j} className="border-l-2 border-[#d7e3eb] pl-2 mb-1 text-[10px]">
+                        <div className="font-semibold text-[#233c4d]">{f.name}</div>
+                        <div className="text-[#496270]">
+                          {f.distance} m{f.tipo ? ` · ${f.tipo}` : ""}
+                          {f.sustancia && ` · ${f.sustancia}`}
+                          {f.volumen && f.volumen > 0 && ` · ${f.volumen.toLocaleString("es-ES")} m³`}
+                        </div>
+                        {f.mena && <div className="text-[#587180] text-[9px]">Mena: {f.mena}</div>}
+                        {f.cota && f.cota > 0 && <div className="text-[#587180] text-[9px]">Cota: {f.cota} m</div>}
+                      </div>
+                    ))}
+                    {r.features.length > 8 && (
+                      <div className="text-[10px] text-[#587180] pl-2 italic">
+                        …y {r.features.length - 8} registros más (ver en mapa)
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             ))}
           </div>
