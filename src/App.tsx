@@ -121,6 +121,32 @@ export default function App() {
   const [statusMsg, setStatusMsg] = useState<string>("");
   const [currentBase, setCurrentBase] = useState<string>("Esri World Imagery");
 
+  /* ─── Fase 3: MDT y consulta de cotas ─── */
+  interface MDTMetadata {
+    resolution: number;
+    extent: string;
+    points: number;
+    minElev: number;
+    maxElev: number;
+    sha256?: string;
+  }
+  
+  interface ElevationQueryResult {
+    lat: number;
+    lon: number;
+    elev: number;
+    slope?: number;
+    slopePercent?: number;
+  }
+
+  const [mdtMetadata, setMdtMetadata] = useState<MDTMetadata | null>(null);
+  const [mdtData, setMdtData] = useState<Map<string, number>>(new Map());
+  const [showHillshade, setShowHillshade] = useState(false);
+  const [queryMode, setQueryMode] = useState(false);
+  const [queryResult, setQueryResult] = useState<ElevationQueryResult | null>(null);
+  const hillshadeLayerRef = useRef<L.ImageOverlay | null>(null);
+  const queryElevationRef = useRef<(lat: number, lon: number) => ElevationQueryResult | null>(() => null);
+
   /* ─── init map ─── */
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -358,7 +384,20 @@ export default function App() {
     const map = mapRef.current;
     if (!map) return;
     const handler = (e: L.LeafletMouseEvent) => {
-      if (measureMode !== "off") {
+      if (queryMode && mdtData.size > 0) {
+        const result = queryElevationRef.current(e.latlng.lat, e.latlng.lng);
+        if (result) {
+          setQueryResult(result);
+          // Marcar el punto consultado
+          L.circleMarker([e.latlng.lat, e.latlng.lng], {
+            radius: 5,
+            color: "#fbbf24",
+            fillColor: "#fbbf24",
+            fillOpacity: 0.8,
+            weight: 2
+          }).bindPopup(`Cota: ${result.elev.toFixed(2)} m`).addTo(map);
+        }
+      } else if (measureMode !== "off") {
         const pt: [number, number] = [e.latlng.lat, e.latlng.lng];
         setMeasurePoints(prev => [...prev, pt]);
         const layer = measurementLayerRef.current;
@@ -371,7 +410,7 @@ export default function App() {
     };
     map.on("click", handler);
     return () => { map.off("click", handler); };
-  }, [measureMode, showAnnotForm]);
+  }, [measureMode, showAnnotForm, queryMode, mdtData]);
 
   /* ─── 1m² cell ─── */
   const drawCell = useCallback(() => {
@@ -680,6 +719,152 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
   const minElev = profileData.length > 0 ? Math.min(...profileData.map(p => p.elev)) : 0;
   const maxElev = profileData.length > 0 ? Math.max(...profileData.map(p => p.elev)) : 0;
 
+  /* ─── Fase 3: MDT y consulta de cotas ─── */
+  interface MDTMetadata {
+    resolution: number;
+    extent: string;
+    points: number;
+    minElev: number;
+    maxElev: number;
+    sha256?: string;
+  }
+  
+  interface ElevationQueryResult {
+    lat: number;
+    lon: number;
+    elev: number;
+    slope?: number;
+    slopePercent?: number;
+  }
+
+
+
+  const importMDTData = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        
+        // Validar estructura esperada
+        if (!data.metadata || !data.grid) {
+          setStatusMsg("Error: formato MDT inválido. Se espera {metadata, grid}.");
+          return;
+        }
+
+        const { metadata, grid } = data;
+        
+        // Crear mapa de coordenadas a elevaciones
+        const elevMap = new Map<string, number>();
+        grid.forEach((point: any) => {
+          const key = `${point.lat.toFixed(6)},${point.lon.toFixed(6)}`;
+          elevMap.set(key, point.elev);
+        });
+
+        setMdtData(elevMap);
+        setMdtMetadata({
+          resolution: metadata.resolution,
+          extent: metadata.extent,
+          points: grid.length,
+          minElev: metadata.minElev,
+          maxElev: metadata.maxElev,
+          sha256: metadata.sha256
+        });
+
+        // Dibujar puntos en el mapa
+        if (mapRef.current) {
+          const layer = L.layerGroup().addTo(mapRef.current);
+          grid.forEach((point: any) => {
+            const color = getElevationColor(point.elev, metadata.minElev, metadata.maxElev);
+            L.circleMarker([point.lat, point.lon], {
+              radius: 2,
+              color: color,
+              fillColor: color,
+              fillOpacity: 0.6,
+              weight: 0
+            }).addTo(layer);
+          });
+        }
+
+        setStatusMsg(`MDT cargado: ${grid.length} puntos, resolución ${metadata.resolution}m`);
+      } catch (err) {
+        setStatusMsg("Error al procesar el archivo MDT.");
+      }
+    };
+    reader.readAsText(file);
+  }, []);
+
+  const getElevationColor = (elev: number, min: number, max: number): string => {
+    const ratio = (elev - min) / (max - min);
+    const r = Math.round(255 * (1 - ratio));
+    const g = Math.round(255 * ratio);
+    return `rgb(${r}, ${g}, 100)`;
+  };
+
+  const toggleHillshade = useCallback(() => {
+    if (!mapRef.current || mdtData.size === 0) return;
+    
+    if (showHillshade) {
+      if (hillshadeLayerRef.current) {
+        mapRef.current.removeLayer(hillshadeLayerRef.current);
+        hillshadeLayerRef.current = null;
+      }
+      setShowHillshade(false);
+    } else {
+      // Generar hillshade simplificado (requeriría procesamiento real)
+      setStatusMsg("Sombreado: requiere procesamiento GDAL/QGIS previo. Mostrando puntos de elevación.");
+      setShowHillshade(true);
+    }
+  }, [showHillshade, mdtData]);
+
+  const queryElevation = useCallback((lat: number, lon: number): ElevationQueryResult | null => {
+    if (mdtData.size === 0) {
+      setStatusMsg("No hay MDT cargado.");
+      return null;
+    }
+
+    // Buscar punto más cercano
+    let closestKey = "";
+    let minDist = Infinity;
+    
+    mdtData.forEach((_, key) => {
+      const [pointLat, pointLon] = key.split(",").map(Number);
+      const dist = Math.sqrt(Math.pow(pointLat - lat, 2) + Math.pow(pointLon - lon, 2));
+      if (dist < minDist) {
+        minDist = dist;
+        closestKey = key;
+      }
+    });
+
+    if (closestKey) {
+      const elev = mdtData.get(closestKey)!;
+      
+      // Calcular pendiente aproximada (simplificado)
+      const [pointLat, pointLon] = closestKey.split(",").map(Number);
+      const neighbors = [
+        mdtData.get(`${(pointLat + 0.00001).toFixed(6)},${pointLon.toFixed(6)}`),
+        mdtData.get(`${(pointLat - 0.00001).toFixed(6)},${pointLon.toFixed(6)}`),
+        mdtData.get(`${pointLat.toFixed(6)},${(pointLon + 0.00001).toFixed(6)}`),
+        mdtData.get(`${pointLat.toFixed(6)},${(pointLon - 0.00001).toFixed(6)}`)
+      ].filter((n): n is number => n !== undefined);
+
+      let slope = 0;
+      let slopePercent = 0;
+      if (neighbors.length > 0) {
+        const maxDiff = Math.max(...neighbors.map(n => Math.abs(n - elev)));
+        slopePercent = (maxDiff / 1.11) * 100; // ~1.11m por 0.00001 grados
+        slope = Math.atan(maxDiff / 1.11) * (180 / Math.PI);
+      }
+
+      return { lat, lon, elev, slope, slopePercent };
+    }
+    return null;
+  }, [mdtData]);
+
+  // Actualizar la referencia cuando queryElevation cambie
+  useEffect(() => {
+    queryElevationRef.current = queryElevation;
+  }, [queryElevation]);
+
   function downloadBlob(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -711,9 +896,9 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
 
       {/* Sidebar */}
       <aside className="absolute left-3 top-3 bottom-3 w-[min(400px,calc(100vw-24px))] overflow-y-auto bg-white/97 z-[1000] shadow-[0_6px_26px_#12283c36] rounded-2xl p-4 max-md:top-auto max-md:bottom-0 max-md:left-0 max-md:w-full max-md:h-[44%] max-md:rounded-t-2xl max-md:p-3">
-        <div className="text-[10px] uppercase tracking-[1.6px] font-extrabold text-[#397590] mb-1">GEO-LAB 2.0</div>
-        <h1 className="text-lg leading-tight mb-1 text-[#18374a] tracking-tight max-md:text-base">Cortijo de Daniela · Visor geológico</h1>
-        <p className="text-xs text-[#496270] leading-snug mb-2">Reconocimiento preliminar de escombreras e indicios minerales. Montemolín (Badajoz).</p>
+        <div className="text-[10px] uppercase tracking-[1.6px] font-extrabold text-[#397590] mb-1">GEO-LAB 3.0</div>
+        <h1 className="text-lg leading-tight mb-1 text-[#18374a] tracking-tight max-md:text-base">Cortijo de Daniela · Integración LiDAR y MDT</h1>
+        <p className="text-xs text-[#496270] leading-snug mb-2">Reconocimiento preliminar con modelos digitales del terreno. Montemolín (Badajoz).</p>
 
         <div className="px-2.5 py-2 bg-[#eef5f8] rounded-lg text-xs font-bold tracking-wide mb-2">
           38.006531 N · −6.060913 O
@@ -874,29 +1059,79 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
 
         <div className="h-px bg-[#e4eaf0] my-3" />
 
-        {/* Fase 2 - Análisis avanzados */}
-        <h2 className="text-sm font-bold mb-1.5 text-[#18374a]">Fase 2 · Análisis avanzados</h2>
-        <div className="bg-[#fef3c7] border border-[#fcd34d] rounded-lg p-2.5 mb-2 text-[10px] leading-snug">
-          <b className="text-[#92400e]">Preparado para importar resultados procesados:</b>
-          <ul className="list-disc pl-3 mt-1 space-y-0.5 text-[#78350f]">
-            <li>LiDAR PNOA procesado (GeoJSON de anomalías topográficas)</li>
-            <li>MDT oficial (perfiles topográficos, curvas de nivel)</li>
-            <li>Clasificación de puntos (suelo, vegetación, estructuras)</li>
+        {/* Fase 3 - Integración LiDAR y MDT */}
+        <h2 className="text-sm font-bold mb-1.5 text-[#18374a]">Fase 3 · Integración LiDAR y MDT</h2>
+        <div className="bg-[#eff6ff] border border-[#bfdbfe] rounded-lg p-2.5 mb-2 text-[10px] leading-snug">
+          <b className="text-[#1e40af]">Productos oficiales disponibles:</b>
+          <ul className="list-disc pl-3 mt-1 space-y-0.5 text-[#1e3a8a]">
+            <li><b>MDT02 PNOA-LiDAR:</b> malla de 2 metros</li>
+            <li><b>MDT50 cm (3ª cobertura):</b> malla de 0,5 metros</li>
+            <li>Sistema de referencia: ETRS89 / UTM 29N (EPSG:25829)</li>
           </ul>
-          <div className="mt-1.5 text-[#92400e]">
-            <b>Importante:</b> Las anomalías cartográficas no son hallazgos geológicos demostrados. Requieren verificación de campo y análisis especializado.
+          <div className="mt-1.5 text-[#1e40af]">
+            <b>Procesamiento requerido:</b> Los rasters deben procesarse en SIG (QGIS, GDAL) antes de importar. El visor muestra resultados, no procesa rasters crudos.
           </div>
         </div>
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          <label className="px-2 py-1 text-[11px] bg-[#fef3c7] border border-[#fcd34d] rounded-md text-[#92400e] hover:bg-[#fde68a] cursor-pointer font-semibold">
-            ⬆ LiDAR procesado (GeoJSON)
-            <input type="file" accept=".geojson,.json" className="hidden" onChange={e => e.target.files?.[0] && importLidarData(e.target.files[0])} />
+        
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          <label className="px-2 py-1 text-[11px] bg-[#eff6ff] border border-[#bfdbfe] rounded-md text-[#1e40af] hover:bg-[#dbeafe] cursor-pointer font-semibold">
+            ⬆ MDT procesado (GeoJSON)
+            <input type="file" accept=".geojson,.json" className="hidden" onChange={e => e.target.files?.[0] && importMDTData(e.target.files[0])} />
           </label>
-          <label className="px-2 py-1 text-[11px] bg-[#fef3c7] border border-[#fcd34d] rounded-md text-[#92400e] hover:bg-[#fde68a] cursor-pointer font-semibold">
-            ⬆ MDT perfiles (CSV)
+          <label className="px-2 py-1 text-[11px] bg-[#eff6ff] border border-[#bfdbfe] rounded-md text-[#1e40af] hover:bg-[#dbeafe] cursor-pointer font-semibold">
+            ⬆ Perfil altimétrico (CSV)
             <input type="file" accept=".csv" className="hidden" onChange={e => e.target.files?.[0] && importProfileData(e.target.files[0])} />
           </label>
+          <label className="px-2 py-1 text-[11px] bg-[#eff6ff] border border-[#bfdbfe] rounded-md text-[#1e40af] hover:bg-[#dbeafe] cursor-pointer font-semibold">
+            ⬆ Anomalías LiDAR (GeoJSON)
+            <input type="file" accept=".geojson,.json" className="hidden" onChange={e => e.target.files?.[0] && importLidarData(e.target.files[0])} />
+          </label>
         </div>
+
+        {/* MDT cargado */}
+        {mdtMetadata && (
+          <div className="bg-[#f0fdf4] border border-[#bbf7d0] rounded-lg p-2 mb-2 text-[10px]">
+            <div className="font-bold text-[#166534] mb-1">✓ MDT cargado</div>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[#14532d]">
+              <span>Resolución:</span>
+              <span className="font-semibold">{mdtMetadata.resolution} m</span>
+              <span>Extensión:</span>
+              <span className="font-semibold text-[9px]">{mdtMetadata.extent}</span>
+              <span>Puntos:</span>
+              <span className="font-semibold">{mdtMetadata.points.toLocaleString("es-ES")}</span>
+              <span>Rango elevación:</span>
+              <span className="font-semibold">{mdtMetadata.minElev.toFixed(1)}–{mdtMetadata.maxElev.toFixed(1)} m</span>
+              {mdtMetadata.sha256 && (
+                <>
+                  <span>SHA-256:</span>
+                  <span className="font-mono text-[8px]">{mdtMetadata.sha256.slice(0, 16)}…</span>
+                </>
+              )}
+            </div>
+            <div className="flex gap-1 mt-1.5">
+              <button onClick={toggleHillshade} className="px-2 py-0.5 bg-white border border-[#86efac] rounded text-[9px] text-[#166534]">
+                {showHillshade ? "Ocultar" : "Mostrar"} sombreado
+              </button>
+              <button onClick={() => setQueryMode(!queryMode)} className="px-2 py-0.5 bg-white border border-[#86efac] rounded text-[9px] text-[#166534]">
+                {queryMode ? "Cancelar" : "Consultar"} cota
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Consulta de cota */}
+        {queryMode && queryResult && (
+          <div className="bg-[#fefce8] border border-[#fde047] rounded-lg p-2 mb-2 text-[10px]">
+            <div className="font-bold text-[#854d0e] mb-1">📍 Cota consultada</div>
+            <div className="text-[#713f12]">
+              <div>Coordenadas: {queryResult.lat.toFixed(6)}, {queryResult.lon.toFixed(6)}</div>
+              <div>Elevación: <b>{queryResult.elev.toFixed(2)} m</b></div>
+              {queryResult.slope !== undefined && queryResult.slopePercent !== undefined && (
+                <div>Pendiente: <b>{queryResult.slope.toFixed(1)}°</b> ({queryResult.slopePercent.toFixed(1)}%)</div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Perfil topográfico */}
         {profileData.length > 0 && (
