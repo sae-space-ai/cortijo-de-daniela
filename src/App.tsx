@@ -54,6 +54,11 @@ interface QueryResult {
     volumen?: number;
     cota?: number;
     municipio?: string;
+    provincia?: string;
+    estado?: string;
+    tipoYacimiento?: string;
+    bibliografia?: string;
+    coordenadasUTM?: string;
     observaciones?: string;
   }>;
   error?: string;
@@ -476,34 +481,49 @@ export default function App() {
           const [lon, lat] = f.geometry.coordinates;
           const a = f.properties || {};
           const m = Math.round(dMeters(CORTIJO[0], CORTIJO[1], lat, lon));
-          const name = a.NOMBRE || a.PARAJE || a.DENOMINACION || a.NOMBREMIN || "Registro sin denominación";
-          const tipo = a.ESTRUC || a.Sustancia || a.SUSTANCIA || "";
+          
+          // Campos específicos para BDMIN (Indicios Minerales)
+          const name = a.NOMBREMIN || a.NOMBRE || a.PARAJE || a.DENOMINACION || "Indicio sin denominación";
+          const tipo = a.TIPO_YACIMIENTO || a.ESTRUC || a.Sustancia || a.SUSTANCIA || "";
           const paraje = a.PARAJE || "";
-          const sustancia = a.Sustancia || a.SUSTANCIA || "";
+          const sustancia = a.Sustancia || a.SUSTANCIA || a.SUST_MIN || "";
           const mena = a.MENA || "";
           const volumen = a.VOLU || 0;
-          const cota = a.COTA || 0;
-          const municipio = a.NOMBRE_MUN || "";
-          const observaciones = a.OBSER || "";
+          const cota = a.COTA || a.ALTITUD || 0;
+          const municipio = a.NOMBRE_MUN || a.MUNICIPIO || "";
+          const provincia = a.NMPRV || a.PROVINCIA || "";
+          const estado = a.ESTADO || a.SITUACION || "";
+          const tipoYacimiento = a.TIPO_YACIMIENTO || "";
+          const bibliografia = a.BIBLIOGRAFIA || "";
+          const coordenadasUTM = a.COORX && a.COORY ? `${a.COORX}, ${a.COORY}` : "";
+          const observaciones = a.OBSER || a.OBSERVACIONES || "";
 
           if (layer) {
             let popup = `<b>${escapeText(name)}</b><br>`;
             popup += `<b>${escapeText(title)}</b><br>`;
-            if (tipo) popup += `Tipo: ${escapeText(tipo)}<br>`;
+            if (tipoYacimiento) popup += `Tipo yacimiento: ${escapeText(tipoYacimiento)}<br>`;
             if (paraje && paraje !== name) popup += `Paraje: ${escapeText(paraje)}<br>`;
             if (sustancia) popup += `Sustancia: ${escapeText(sustancia)}<br>`;
             if (mena) popup += `Mena: ${escapeText(mena)}<br>`;
+            if (estado) popup += `Estado: ${escapeText(estado)}<br>`;
             if (volumen > 0) popup += `Volumen: ${volumen.toLocaleString("es-ES")} m³<br>`;
             if (cota > 0) popup += `Cota: ${cota} m<br>`;
             if (municipio) popup += `Municipio: ${escapeText(municipio)}<br>`;
+            if (provincia) popup += `Provincia: ${escapeText(provincia)}<br>`;
+            if (coordenadasUTM) popup += `UTM: ${escapeText(coordenadasUTM)}<br>`;
             popup += `${m} m del cortijo<br>`;
             if (observaciones) popup += `<small>${escapeText(observaciones)}</small><br>`;
-            popup += `<small>IGME · Inventario 1989 · registro histórico</small>`;
+            if (bibliografia) popup += `<small><i>Ref: ${escapeText(bibliografia.slice(0, 80))}${bibliografia.length > 80 ? '...' : ''}</i></small><br>`;
+            popup += `<small>IGME · Base de datos de indicios minerales</small>`;
 
             L.circleMarker([lat, lon], { radius: 7, color: "#fff", weight: 1.5, fillColor: ep.color, fillOpacity: 0.95 })
-              .bindPopup(popup, { maxWidth: 300 }).addTo(layer);
+              .bindPopup(popup, { maxWidth: 350 }).addTo(layer);
           }
-          return { name, distance: m, tipo, lat, lon, paraje, sustancia, mena, volumen, cota, municipio, observaciones };
+          return { 
+            name, distance: m, tipo, lat, lon, paraje, sustancia, mena, 
+            volumen, cota, municipio, provincia, estado, tipoYacimiento, 
+            bibliografia, coordenadasUTM, observaciones 
+          };
         });
         newResults.push({ title, count: features.length, features: parsedFeatures });
       } catch (e: any) {
@@ -643,12 +663,12 @@ export default function App() {
   }, [observations, importedData]);
 
   const exportCSV = useCallback(() => {
-    let csv = "lat;lon;nombre;tipo;paraje;sustancia;mena;volumen_m3;cota_m;municipio;distancia_m;fuente;observaciones;fecha\n";
+    let csv = "lat;lon;nombre;tipo_yacimiento;paraje;sustancia;mena;estado;volumen_m3;cota_m;municipio;provincia;coordenadas_utm;distancia_m;fuente;observaciones;bibliografia;fecha\n";
     observations.forEach(o => {
-      csv += `${o.lat};${o.lon};"${o.origen}";observacion;;;;;;0;"${o.descripcion}";${o.fecha}\n`;
+      csv += `${o.lat};${o.lon};"${o.origen}";observacion;;;;;;;0;;"${o.descripcion}";${o.fecha}\n`;
     });
     results.forEach(r => r.features.forEach(f => {
-      csv += `${f.lat};${f.lon};"${f.name}";"${f.tipo}";"${f.paraje || ""}";"${f.sustancia || ""}";"${f.mena || ""}";${f.volumen || 0};${f.cota || 0};"${f.municipio || ""}";${f.distance};${r.title};"${f.observaciones || ""}";\n`;
+      csv += `${f.lat};${f.lon};"${f.name}";"${f.tipoYacimiento || f.tipo}";"${f.paraje || ""}";"${f.sustancia || ""}";"${f.mena || ""}";"${f.estado || ""}";${f.volumen || 0};${f.cota || 0};"${f.municipio || ""}";"${f.provincia || ""}";"${f.coordenadasUTM || ""}";${f.distance};${r.title};"${f.observaciones || ""}";"${f.bibliografia || ""}";\n`;
     }));
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, "geolab_export.csv");
@@ -695,17 +715,19 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
         if (totalVol > 0) html += ` · Volumen total: ${totalVol.toLocaleString("es-ES")} m³`;
         html += `</p>`;
 
-        html += `<table><tr><th>Nombre</th><th>Distancia</th><th>Tipo</th><th>Sustancia</th><th>Mena</th><th>Volumen</th><th>Cota</th><th>Municipio</th></tr>`;
+        html += `<table><tr><th>Nombre</th><th>Distancia</th><th>Tipo Yacimiento</th><th>Sustancia</th><th>Mena</th><th>Estado</th><th>Volumen</th><th>Cota</th><th>Municipio</th><th>Provincia</th></tr>`;
         r.features.forEach(f => {
           html += `<tr>`;
           html += `<td>${escapeText(f.name)}</td>`;
           html += `<td>${f.distance} m</td>`;
-          html += `<td>${escapeText(f.tipo)}</td>`;
+          html += `<td>${escapeText(f.tipoYacimiento || f.tipo || "")}</td>`;
           html += `<td>${escapeText(f.sustancia || "")}</td>`;
           html += `<td>${escapeText(f.mena || "")}</td>`;
+          html += `<td>${escapeText(f.estado || "")}</td>`;
           html += `<td>${f.volumen ? f.volumen.toLocaleString("es-ES") + " m³" : ""}</td>`;
           html += `<td>${f.cota ? f.cota + " m" : ""}</td>`;
           html += `<td>${escapeText(f.municipio || "")}</td>`;
+          html += `<td>${escapeText(f.provincia || "")}</td>`;
           html += `</tr>`;
         });
         html += `</table>`;
@@ -1149,12 +1171,14 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
                       <div key={j} className="border-l-2 border-[#d7e3eb] pl-2 mb-1 text-[10px]">
                         <div className="font-semibold text-[#233c4d]">{f.name}</div>
                         <div className="text-[#496270]">
-                          {f.distance} m{f.tipo ? ` · ${f.tipo}` : ""}
+                          {f.distance} m{f.tipoYacimiento ? ` · ${f.tipoYacimiento}` : f.tipo ? ` · ${f.tipo}` : ""}
                           {f.sustancia && ` · ${f.sustancia}`}
                           {f.volumen && f.volumen > 0 && ` · ${f.volumen.toLocaleString("es-ES")} m³`}
                         </div>
                         {f.mena && <div className="text-[#587180] text-[9px]">Mena: {f.mena}</div>}
+                        {f.estado && <div className="text-[#587180] text-[9px]">Estado: {f.estado}</div>}
                         {f.cota && f.cota > 0 && <div className="text-[#587180] text-[9px]">Cota: {f.cota} m</div>}
+                        {f.municipio && <div className="text-[#587180] text-[9px]">{f.municipio}{f.provincia ? `, ${f.provincia}` : ""}</div>}
                       </div>
                     ))}
                     {r.features.length > 8 && (
