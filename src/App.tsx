@@ -1066,10 +1066,37 @@ th{background:#eef5f8}.warn{background:#fff9ee;border-left:3px solid #cb7e14;pad
           <ul className="list-disc pl-3 mt-1 space-y-0.5 text-[#1e3a8a]">
             <li><b>MDT02 PNOA-LiDAR:</b> malla de 2 metros</li>
             <li><b>MDT50 cm (3ª cobertura):</b> malla de 0,5 metros</li>
+            <li><b>Cartografía 1:500:</b> Catastro parcelario + ortofoto PNOA 25-50cm</li>
             <li>Sistema de referencia: ETRS89 / UTM 29N (EPSG:25829)</li>
           </ul>
           <div className="mt-1.5 text-[#1e40af]">
             <b>Procesamiento requerido:</b> Los rasters deben procesarse en SIG (QGIS, GDAL) antes de importar. El visor muestra resultados, no procesa rasters crudos.
+          </div>
+        </div>
+
+        {/* Cartografía 1:500 */}
+        <div className="bg-[#fef3c7] border border-[#fcd34d] rounded-lg p-2.5 mb-2 text-[10px] leading-snug">
+          <b className="text-[#92400e]">📐 Cartografía escala 1:500</b>
+          <div className="mt-1 text-[#78350f]">
+            <b>Fuentes disponibles para Montemolín:</b>
+            <ul className="list-disc pl-3 mt-0.5 space-y-0.5">
+              <li><b>Catastro:</b> Límites parcelarios, referencias, construcciones (precisión submétrica)</li>
+              <li><b>Ortofoto PNOA:</b> 25-50 cm/píxel (máxima actualidad)</li>
+              <li><b>LiDAR clasificado:</b> Nube de puntos para generar MDT/MDS de alta resolución</li>
+              <li><b>Planos topográficos:</b> Consultar Ayuntamiento de Montemolín</li>
+            </ul>
+            <div className="mt-1.5 bg-white/50 rounded p-1.5">
+              <b>Aplicaciones:</b> Estudios geotécnicos, prospección arqueológica, documentación de hallazgos, planificación de intervenciones.
+            </div>
+            <div className="mt-1 text-[#92400e]">
+              <a href="https://www1.sedecatastro.gob.es/Cartografia/mapa.aspx?" target="_blank" rel="noopener noreferrer" className="underline font-semibold">
+                → Sede Electrónica del Catastro
+              </a>
+              {' · '}
+              <a href="https://centrodedescargas.cnig.es/CentroDescargas/buscarRedir.do?destino=DescargaPNOA" target="_blank" rel="noopener noreferrer" className="underline font-semibold">
+                → Ortofoto PNOA
+              </a>
+            </div>
           </div>
         </div>
         
