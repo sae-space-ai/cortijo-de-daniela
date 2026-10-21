@@ -1,118 +1,168 @@
-# GEO-LAB 2.0 — Cortijo de Daniela
+# GEO-LAB · Cortijo de Daniela
 
-## Visor cartográfico para reconocimiento preliminar de escombreras e indicios minerales
+## Visor cartográfico para reconocimiento preliminar con integración LiDAR y MDT
 
-**Ubicación:** Montemolín (Badajoz) · 38.006531 N, −6.060913 O
-
----
-
-## ⚠️ AVISO IMPORTANTE: LÍMITES PROBATORIOS
-
-### Lo que esta plataforma **NO PUEDE** hacer:
-
-1. **Identificar minerales directamente**
-   - Requiere análisis de laboratorio (difracción de rayos X, espectrometría, etc.)
-   - La cartografía geológica (GEODE) muestra unidades litológicas a escala 1:50.000, no composición mineralógica verificada
-
-2. **Detectar galerías subterráneas**
-   - Requiere estudios geofísicos de campo (georradar, resistividad eléctrica, magnetometría)
-   - Los registros mineros históricos (BDMIN) son documentación de inventario, no detección activa
-
-3. **Identificar depósitos arqueológicos**
-   - Requiere prospección arqueológica autorizada por la Junta de Extremadura
-   - La capa de patrimonio cultural muestra BIC catalogados, no yacimientos no documentados
-
-4. **Verificar hallazgos desde anomalías LiDAR**
-   - Las anomalías topográficas son **indicios cartográficos**, no hallazgos geológicos demostrados
-   - Requieren verificación de campo y análisis especializado
-
-### Lo que esta plataforma **SÍ PUEDE** hacer:
-
-1. **Integrar fuentes públicas oficiales:**
-   - Inventario de escombreras IGME (1989)
-   - Base de datos de indicios minerales (BDMIN)
-   - Cartografía geológica GEODE 1:50.000
-   - Patrimonio arqueológico de Extremadura (BIC catalogados)
-
-2. **Preparar la estructura para importar resultados procesados:**
-   - LiDAR PNOA procesado en SIG (GeoJSON de anomalías clasificadas)
-   - MDT oficial con perfiles topográficos
-   - Clasificación de puntos (suelo, vegetación, estructuras)
-
-3. **Herramientas de análisis cartográfico:**
-   - Medición de distancias y superficies
-   - Registro de observaciones geolocalizadas
-   - Exportación de datos en múltiples formatos
+**Ubicación:** Montemolín (Badajoz) · 38.006531 N, −6.060913 O  
+**Versión actual:** 3.0
 
 ---
 
-## Fase 2: Incorporación de datos procesados
+## 📋 Resumen ejecutivo
 
-### Procedimiento para LiDAR PNOA
+GEO-LAB es una plataforma web de reconocimiento cartográfico que integra:
+- Cartografía catastral original (8 polígonos, 5 referencias)
+- Servicios WMS oficiales (IGME, patrimonio arqueológico)
+- Modelos digitales del terreno (MDT02, MDT50cm)
+- Herramientas de medición y anotación
+- Sistema de trazabilidad con hashes SHA-256
 
-1. **Procesamiento previo (fuera de esta plataforma):**
-   - Descargar nube de puntos LiDAR del PNOA (formato LAZ)
-   - Procesar en software especializado (CloudCompare, QGIS con plugin LAStools, ArcGIS)
-   - Clasificar puntos (suelo, vegetación, estructuras)
-   - Generar MDT y MDS
-   - Identificar anomalías topográficas (depresiones, montículos, alineaciones)
-   - Exportar anomalías como **GeoJSON** (WGS84 / EPSG:4326)
+**Estado actual:** Infraestructura completa lista para integrar MDT oficial del Cortijo de Daniela.
 
-2. **Formato GeoJSON esperado:**
-   ```json
-   {
-     "type": "FeatureCollection",
-     "features": [
-       {
-         "type": "Feature",
-         "properties": {
-           "tipo": "depresion|monticulo|alineacion",
-           "descripcion": "Descripción de la anomalía",
-           "dimensiones": "Aprox. 3x2 m",
-           "profundidad_altura": "0.5 m"
-         },
-         "geometry": {
-           "type": "Polygon",
-           "coordinates": [[[-6.061, 38.006], [-6.060, 38.006], ...]]
-         }
-       }
-     ]
-   }
+---
+
+## 🎯 Evolución del proyecto
+
+### Versión 1.0 — Visor básico
+- Mapa interactivo con Leaflet
+- Polígonos catastrales originales
+- Consulta IGME (escombreras 1989, indicios BDMIN)
+- Herramientas de medición
+- Exportación GeoJSON/CSV/JSON/HTML
+
+### Versión 2.0 — Análisis avanzados
+- Capa WMS de patrimonio arqueológico (Junta de Extremadura)
+- Panel de límites probatorios
+- Sistema de anotaciones geolocalizadas
+- Preparación para importación LiDAR/MDT
+- Documentación técnica completa
+
+### Versión 3.0 — Integración LiDAR y MDT (actual)
+- Carga de MDT procesado (GeoJSON)
+- Consulta de cotas y pendientes
+- Visualización de perfiles altimétricos
+- Detección de anomalías morfológicas
+- Sistema de trazabilidad con SHA-256
+- Guía completa de procesamiento SIG
+
+---
+
+## 📦 Archivos del proyecto
+
+### Visor web
+- **`index.html`** — Punto de entrada HTML
+- **`src/App.tsx`** — Aplicación React completa (1200+ líneas)
+- **`src/data/parcels.ts`** — Datos catastrales originales
+- **`src/index.css`** — Estilos Tailwind CSS
+
+### Documentación
+- **`README.md`** — Este archivo (resumen general)
+- **`GEOLAB_3.0_LIDAR_MDT_GUIDE.md`** — Guía completa de integración LiDAR/MDT
+- **`IGME_SERVICE_DOCUMENTATION.md`** — Documentación del servicio IGME
+- **`public/cortijo_daniela_busqueda_escombreras_original.html`** — Versión 1.0 original
+
+### Build
+- **`dist/`** — Archivos compilados para producción
+  - `index.html` (0.5 KB)
+  - `assets/index-*.js` (~356 KB)
+  - `assets/index-*.css` (~16 KB)
+
+---
+
+## 🚀 Uso rápido
+
+### Abrir el visor
+
+1. **Desarrollo local:**
+   ```bash
+   npm install
+   npm run dev
+   # Abrir http://localhost:5173
    ```
 
-3. **Importación en GEO-LAB 2.0:**
-   - Pulsar "⬆ LiDAR procesado (GeoJSON)"
-   - Las anomalías se visualizarán con colores según tipo:
-     - 🟣 Depresiones (posibles excavaciones)
-     - 🔴 Montículos (posibles escombreras o túmulos)
-     - 🟡 Alineaciones (posibles estructuras)
+2. **Producción:**
+   ```bash
+   npm run build
+   # Servir dist/index.html con cualquier servidor HTTP
+   ```
 
-4. **Verificación obligatoria:**
-   - Las anomalías son **indicios**, no hallazgos confirmados
-   - Requieren prospección de campo
-   - Documentar con fotografías, coordenadas GPS precisas
-   - Consultar con especialistas (geólogos, arqueólogos)
+3. **Archivo HTML standalone:**
+   - Abrir `public/cortijo_daniela_busqueda_escombreras_original.html` directamente en el navegador
 
-### Procedimiento para MDT oficial
+### Cargar MDT procesado
 
-1. **Descargar MDT25 del IGN:**
-   - https://centrodedescargas.cnig.es/
-   - Seleccionar "Modelos Digitales de Elevación" → MDT25
-   - Descargar la hoja correspondiente a Montemolín
-
-2. **Procesamiento en SIG:**
-   - Importar MDT (formato ASC o GeoTIFF)
-   - Generar perfiles topográficos entre puntos de interés
-   - Calcular pendientes, orientaciones, curvaturas
-   - Exportar perfiles como **CSV** con columnas: `lat;lon;elevacion`
-
-3. **Importación de perfiles:**
-   - Pulsar "⬆ MDT perfiles (CSV)"
-   - El perfil se visualizará en el mapa y en gráfico de elevación
+1. Procesar MDT oficial con QGIS/GDAL/Python (ver guía)
+2. Exportar como GeoJSON con estructura `{metadata, grid}`
+3. En el visor: "⬆ MDT procesado (GeoJSON)"
+4. Activar "Consultar cota" y hacer clic en el mapa
 
 ---
 
-## Datos conservados
+## 🔍 Funcionalidades principales
+
+### Cartografía
+- **Fondos:** Esri World Imagery, PNOA (IGN), OpenStreetMap, Relieve IGN
+- **Capas WMS:** Escombreras IGME, Indicios minerales BDMIN, GEODE 1:50.000, Patrimonio arqueológico
+- **Datos catastrales:** 8 polígonos originales preservados (SHA-256 verificado)
+
+### Consulta IGME
+- Radio configurable: 1, 3 o 5 km
+- Campos detallados: nombre, tipo, sustancia, mena, volumen, cota, municipio
+- Estadísticas: distancia mín/máx, volumen total
+- Popups enriquecidos en el mapa
+
+### Herramientas de medición
+- **Distancia:** Marcar vértices y calcular distancia total
+- **Superficie:** Marcar polígono y calcular área
+- **Celda 1 m²:** Geometría de referencia (no es una cata)
+- **Perfil altimétrico:** Importar CSV con elevaciones
+
+### Integración MDT (Fase 3)
+- Carga de MDT procesado (GeoJSON)
+- Consulta de cotas en cualquier punto
+- Cálculo de pendientes aproximadas
+- Visualización de puntos coloreados por elevación
+- Metadatos: resolución, extensión, SHA-256
+
+### Anotaciones
+- Registrar indicios geolocalizados
+- Campos: origen, comprobación, descripción
+- Almacenamiento en localStorage
+- Exportación en sesión JSON
+
+### Importación/Exportación
+- **GeoJSON:** Datos geográficos completos
+- **CSV:** Registros tabulares (14 columnas)
+- **Sesión JSON:** Copia completa de observaciones
+- **Informe HTML:** Documento imprimible
+
+---
+
+## ⚠️ Límites probatorios
+
+### Lo que la plataforma **NO PUEDE** hacer:
+
+1. **Identificar minerales directamente**
+   - Requiere análisis de laboratorio (DRX, espectrometría)
+
+2. **Detectar galerías subterráneas**
+   - Requiere geofísica de campo (georradar, resistividad)
+
+3. **Identificar yacimientos arqueológicos**
+   - Requiere prospección autorizada por la Junta de Extremadura
+
+4. **Verificar hallazgos desde anomalías LiDAR/MDT**
+   - Son indicios cartográficos, no hallazgos confirmados
+
+### Lo que la plataforma **SÍ PUEDE** hacer:
+
+1. **Integrar fuentes públicas oficiales**
+2. **Preparar la estructura para importar resultados procesados**
+3. **Proporcionar herramientas de análisis cartográfico**
+4. **Documentar observaciones con trazabilidad**
+
+---
+
+## 📊 Datos conservados
 
 ### Bloque catastral original
 - **8 polígonos** con 5 referencias catastrales distintas
@@ -120,49 +170,113 @@
 - **SHA-256:** `de3a1c347bcfe6d0248a7bb6212381117ea8576b2f224a1c0f49ce8e05fd52be`
 - Sin simplificación ni modificación de vértices
 
----
-
-## Servicios WMS integrados
-
+### Servicios WMS integrados
 | Capa | Fuente | URL |
 |------|--------|-----|
-| Escombreras IGME | IGME-CSIC | https://mapas.igme.es/gis/services/BasesDatos/IGME_InventarioEscombreras/MapServer/WMSServer |
-| Indicios minerales BDMIN | IGME-CSIC | https://mapas.igme.es/gis/services/BasesDatos/IGME_BDMIN_Indicios/MapServer/WMSServer |
-| GEODE 1:50.000 | IGME-CSIC | https://mapas.igme.es/gis/services/Cartografia/IGME_Geode50/MapServer/WMSServer |
-| Patrimonio arqueológico | Junta de Extremadura | http://mapas.ideex.es/CICTEX/patrimonioCultural |
+| Escombreras IGME | IGME-CSIC | mapas.igme.es |
+| Indicios minerales BDMIN | IGME-CSIC | mapas.igme.es |
+| GEODE 1:50.000 | IGME-CSIC | mapas.igme.es |
+| Patrimonio arqueológico | Junta de Extremadura | mapas.ideex.es |
 
 ---
 
-## Fondos cartográficos
+## 🔧 Requisitos técnicos
 
-- **Esri World Imagery:** Ortofoto satelital global
-- **PNOA (IGN):** Ortofoto oficial española (máxima actualidad)
-- **OpenStreetMap:** Callejero colaborativo
-- **Relieve IGN:** MDT25 sombreado (escala regional)
+### Para el visor
+- Navegador moderno (Chrome, Firefox, Edge, Safari)
+- Conexión a internet (para servicios WMS y tile servers)
+- JavaScript habilitado
 
----
+### Para procesamiento MDT
+- **QGIS 3.x** (recomendado) o
+- **GDAL 3.x** (línea de comandos) o
+- **Python 3.8+** con rasterio, numpy, scipy
 
-## Herramientas disponibles
-
-### Medición
-- **Medir distancia:** Marcar vértices y calcular distancia total
-- **Medir superficie:** Marcar polígono y calcular área
-- **Celda 1 m²:** Geometría de referencia (no es una cata verificada)
-
-### Anotación
-- **Anotar punto:** Registrar indicios con coordenadas, origen, comprobación y descripción
-- Las observaciones se guardan en localStorage del navegador
-- Exportar periódicamente la sesión JSON para trazabilidad
-
-### Importación/Exportación
-- **GeoJSON:** Datos geográficos completos
-- **CSV:** Registros tabulares (plantilla descargable)
-- **Sesión JSON:** Copia completa de observaciones e imports
-- **Informe HTML:** Documento imprimible con todos los datos
+### Para desarrollo
+- Node.js 18+
+- npm 9+
+- React 18
+- TypeScript 5
+- Vite 6
+- Tailwind CSS 4
 
 ---
 
-## Referencias institucionales
+## 📚 Documentación detallada
+
+- **[GEOLAB_3.0_LIDAR_MDT_GUIDE.md](./GEOLAB_3.0_LIDAR_MDT_GUIDE.md)** — Guía completa de integración LiDAR y MDT
+  - Procedimiento de descarga y procesamiento
+  - Scripts de ejemplo (QGIS, GDAL, Python)
+  - Formato de archivos esperados
+  - Análisis de anomalías morfológicas
+  - Trazabilidad y documentación
+
+- **[IGME_SERVICE_DOCUMENTATION.md](./IGME_SERVICE_DOCUMENTATION.md)** — Documentación del servicio IGME
+  - Campos disponibles (34 campos)
+  - Consultas avanzadas con filtros
+  - Integración con otras fuentes
+  - Ejemplos de uso
+
+---
+
+## 🎓 Próximos pasos recomendados
+
+### Inmediatos
+1. ✅ Descargar MDT oficial del Centro de Descargas CNIG
+2. ✅ Procesar con QGIS/GDAL/Python (ver guía)
+3. ✅ Importar en GEO-LAB 3.0
+4. ✅ Consultar cotas del Cortijo y arroyo Matarrama
+
+### A medio plazo
+- Generar perfiles topográficos Cortijo → Arroyo
+- Detectar anomalías morfológicas automáticas
+- Cruzar con inventario IGME y patrimonio arqueológico
+- Documentar hallazgos con fotografías georreferenciadas
+
+### A largo plazo
+- Integrar LiDAR multitemporal (detectar cambios)
+- Análisis de cuencas visuales
+- Modelado 3D del terreno
+- Realidad aumentada para trabajo de campo
+
+---
+
+## 🔬 Verificación técnica realizada
+
+- ✅ Comparación literal del bloque catastral frente al archivo original
+- ✅ Validación sintáctica del JavaScript (TypeScript)
+- ✅ Pruebas de interacción, medición, registro de observaciones
+- ✅ Importación de CSV y exportación GeoJSON/CSV/JSON/HTML
+- ✅ Compilación exitosa con Vite
+- ⚠️ No se ejecutó comprobación visual con mosaicos reales
+- ⚠️ No se ejecutó consulta de red al IGME en pruebas automatizadas
+- ⚠️ No se han incorporado aún elevaciones reales del Cortijo (pendiente MDT oficial)
+
+---
+
+## 📄 Licencia y uso
+
+### Datos
+- **Cartografía catastral:** Aportada por el usuario
+- **Servicios WMS:** IGME-CSIC, IGN, CNIG, Junta de Extremadura
+- **MDT PNOA:** Dominio público con atribución al CNIG/IGN
+
+### Software
+- **React, Vite, Tailwind CSS:** MIT License
+- **Leaflet:** BSD 2-Clause License
+
+### Responsabilidad
+Esta plataforma es una herramienta de **reconocimiento preliminar**. No sustituye:
+- Estudios geotécnicos profesionales
+- Prospecciones arqueológicas autorizadas
+- Análisis de laboratorio
+- Peritajes oficiales
+
+**Responsabilidad del usuario:** Verificar la información y obtener las autorizaciones necesarias antes de cualquier intervención en el terreno.
+
+---
+
+## 📞 Referencias institucionales
 
 - **IGME-CSIC:** Instituto Geológico y Minero de España
   - https://www.igme.es/
@@ -180,68 +294,29 @@
 
 ---
 
-## Próximos pasos recomendados
+## 📝 Historial de cambios
 
-### Para verificación de indicios minerales:
-1. Consultar el **Inventario de Escombreras** del IGME (capa WMS activa)
-2. Revisar la **BDMIN** para indicios minerales documentados en la zona
-3. Si se detectan anomalías en ortofoto o LiDAR:
-   - Solicitar permiso de acceso a la propiedad
-   - Realizar prospección superficial
-   - Tomar muestras para análisis de laboratorio
-   - Consultar con geólogo especializado
+### v3.0 (2026)
+- Integración de MDT procesado (GeoJSON)
+- Consulta de cotas y pendientes
+- Visualización de perfiles altimétricos
+- Sistema de trazabilidad con SHA-256
+- Guía completa de procesamiento SIG
 
-### Para verificación arqueológica:
-1. Consultar la capa de **Patrimonio Cultural** de Extremadura
-2. Revisar el **Catálogo de Bienes de Interés Cultural**
-3. Si se detectan posibles estructuras:
-   - **NO intervenir sin autorización**
-   - Contactar con la Dirección General de Patrimonio de la Junta de Extremadura
-   - Solicitar prospección arqueológica autorizada
-   - Documentar con fotografías y coordenadas GPS
+### v2.0 (2026)
+- Capa WMS de patrimonio arqueológico
+- Panel de límites probatorios
+- Sistema de anotaciones geolocalizadas
+- Preparación para importación LiDAR/MDT
 
-### Para análisis topográfico avanzado:
-1. Procesar LiDAR PNOA en SIG especializado
-2. Generar MDT de alta resolución
-3. Identificar anomalías topográficas
-4. Importar resultados en GEO-LAB 2.0
-5. Verificar en campo las anomalías detectadas
+### v1.0 (2026)
+- Visor cartográfico básico
+- Consulta IGME (escombreras, indicios)
+- Herramientas de medición
+- Exportación de datos
 
 ---
 
-## Limitaciones técnicas
-
-- **No decodifica LAZ ni GeoTIFF:** Requiere procesamiento previo en SIG
-- **Escala GEODE:** 1:50.000 (no es detalle submétrico)
-- **Dependencia de internet:** Servicios WMS requieren conexión
-- **CORS:** Algunas configuraciones de privacidad pueden bloquear consultas
-- **Almacenamiento local:** Las observaciones se guardan en el navegador (exportar periódicamente)
-
----
-
-## Verificación técnica realizada
-
-- ✅ Comparación literal del bloque catastral frente al archivo original
-- ✅ Validación sintáctica del JavaScript
-- ✅ Pruebas de interacción, medición, registro de observaciones
-- ✅ Importación de CSV y exportación GeoJSON/CSV/JSON/HTML
-- ⚠️ No se ejecutó comprobación visual con mosaicos reales
-- ⚠️ No se ejecutó consulta de red al IGME (las respuestas en pruebas fueron simuladas)
-
----
-
-## Licencia y uso
-
-Esta plataforma es una herramienta de **reconocimiento preliminar**. No sustituye:
-- Estudios geotécnicos profesionales
-- Prospecciones arqueológicas autorizadas
-- Análisis de laboratorio
-- Peritajes oficiales
-
-**Responsabilidad del usuario:** Verificar la información y obtener las autorizaciones necesarias antes de cualquier intervención en el terreno.
-
----
-
-**Versión:** 2.0  
-**Fecha:** 2026  
-**Desarrollo:** React + Vite + Tailwind CSS + Leaflet
+**Desarrollo:** React + Vite + TypeScript + Tailwind CSS + Leaflet  
+**Última actualización:** 2026  
+**Estado:** Producción · Infraestructura lista para MDT oficial
